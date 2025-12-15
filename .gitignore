@@ -1,0 +1,65 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+
+# Virtual environments
+venv/
+.env/
+.env.*
+
+# =========================
+# FastAPI / Uvicorn
+# =========================
+*.log
+uvicorn.log
+
+# =========================
+# OS / Editor junk
+# =========================
+# Windows
+Thumbs.db
+Desktop.ini
+
+# VS Code
+.vscode/
+.history/
+
+# =========================
+# Build / cache
+# =========================
+dist/
+build/
+*.egg-info/
+
+# =========================
+# Security / runtime artifacts
+# =========================
+*.xml        # nmap output if ever saved
+*.csv
+*.jsonl
+reports/
+output/
+
+# =========================
+# Tests / local scripts
+# =========================
+test_nmap.py
+test_nmap_parse.py
+
+# =========================
+# Node / frontend (future-proof)
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =========================
+# System
+# =========================
+.DS_Store
