@@ -1,6 +1,8 @@
 # Automazior ASM v1.3  
 **Attack Surface Monitoring Engine**
 
+**Developed by [Pranshu Pathak](https://github.com/mprshark)**
+
 Automazior ASM v1.3 is a **backend-focused Attack Surface Monitoring (ASM) engine** designed to identify, structure, and interpret the external attack surface of a domain using **safe, controlled reconnaissance techniques**.
 
 This project prioritizes **clarity, scope discipline, and explainable risk assessment** over aggressive scanning or exploitation.
@@ -320,6 +322,22 @@ Potential future expansions:
 - Historical comparisons
 - Configurable scan depth
 - Optional vulnerability scanning (separate mode)
+
+---
+
+## 👥 Contributors
+
+**Lead Developer:** [Pranshu Pathak](https://github.com/mprshark)
+
+Contributions are welcome! If you'd like to contribute to Automazior ASM:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+Please ensure your contributions align with the project's scope philosophy: **if it's not in v1.3 Core Capabilities, it belongs in v2**.
 
 ---
 
