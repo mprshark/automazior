@@ -1,91 +1,125 @@
-def calculate_risk(scan: dict) -> dict:
-    score = 0
-    reasons = set()
+from typing import Dict, List
 
-    # --------------------
-    # Ports
-    # --------------------
+
+def calculate_risk(scan: Dict) -> Dict:
+    score = 0
+    reasons: List[str] = []
+
+    # -----------------------------
+    # PORTS
+    # -----------------------------
     ports = scan.get("ports", {})
 
     if ports.get("80") == "open":
         score += 10
-        reasons.add("HTTP (port 80) is open")
+        reasons.append("HTTP (port 80) is open")
 
-    # --------------------
+    # We do NOT penalize 443 being open
+    # HTTPS being open is expected
+
+
+    # -----------------------------
     # SSL / TLS
-    # --------------------
+    # -----------------------------
     ssl = scan.get("ssl", {})
 
-    ssl_status = ssl.get("status")
-    ssl_confidence = ssl.get("confidence")
-
-    if ssl_status == "disabled" and ssl_confidence == "high":
+    if ssl.get("status") != "enabled":
         score += 20
-        reasons.add("SSL is disabled")
+        reasons.append("SSL is not enabled")
 
-    elif ssl_status == "enabled" and ssl_confidence == "medium":
-        score += 5
-        reasons.add("SSL enabled with limited verification confidence")
+    else:
+        confidence = ssl.get("confidence")
 
-    # --------------------
-    # Technology exposure
-    # --------------------
+        if confidence == "medium":
+            score += 5
+            reasons.append("SSL enabled with limited verification confidence")
+
+        elif confidence == "low":
+            score += 10
+            reasons.append("SSL enabled but reliability is uncertain")
+
+
+    # -----------------------------
+    # HTTPS SECURITY HEADERS
+    # -----------------------------
+    https_headers = scan.get("https_headers")
+
+    if https_headers:
+        summary = https_headers.get("summary", {})
+
+        missing = summary.get("missing", 0)
+        permissive = summary.get("permissive", 0)
+
+        # Headers reduce risk slightly if strong
+        if summary.get("strong", 0) >= 3:
+            score -= 5
+
+        # But missing headers alone are not critical
+        if missing >= 3:
+            score += 5
+            reasons.append("Multiple security headers are missing")
+
+        if permissive >= 2:
+            score += 5
+            reasons.append("Permissive HTTPS security headers detected")
+
+
+    # -----------------------------
+    # SUBDOMAINS
+    # -----------------------------
+    subdomains = scan.get("subdomains")
+
+    if isinstance(subdomains, dict):
+        count = subdomains.get("count", 0)
+
+        if count >= 10:
+            score += 15
+            reasons.append("Large number of exposed subdomains")
+        elif count >= 3:
+            score += 5
+            reasons.append("Exposed subdomains detected")
+
+    elif isinstance(subdomains, list):
+        # Backward compatibility
+        if len(subdomains) >= 10:
+            score += 15
+            reasons.append("Large number of exposed subdomains")
+        elif len(subdomains) >= 3:
+            score += 5
+            reasons.append("Exposed subdomains detected")
+
+
+    # -----------------------------
+    # TECHNOLOGY EXPOSURE
+    # -----------------------------
     tech = scan.get("technology", {})
 
     if tech.get("server"):
         score += 5
-        reasons.add("Server version is exposed")
+        reasons.append("Server version is exposed")
 
-    if not tech.get("cdn"):
+    if tech.get("cdn") is False:
         score += 5
-        reasons.add("No CDN detected")
+        reasons.append("No CDN detected")
 
-    # --------------------
-    # Subdomains
-    # --------------------
-    subdomains = scan.get("subdomains", [])
 
-    if len(subdomains) > 20:
-        score += 15
-        reasons.add("Large number of exposed subdomains")
-    elif len(subdomains) > 0:
-        score += 5
-        reasons.add("Exposed subdomains detected")
+    # -----------------------------
+    # NORMALIZATION
+    # -----------------------------
+    if score < 0:
+        score = 0
+    if score > 100:
+        score = 100
 
-    # --------------------
-    # Nmap services
-    # --------------------
-    nmap = scan.get("nmap", {})
-    services = nmap.get("services", [])
-
-    sensitive_ports = {21, 22, 23, 3389}
-
-    for svc in services:
-        port = svc.get("port")
-        product = svc.get("product")
-        version = svc.get("version")
-
-        if port in sensitive_ports:
-            score += 10
-            reasons.add(f"Sensitive service exposed on port {port}")
-
-        if product and version:
-            reasons.add(f"Service version detected: {product} {version}")
-
-    # --------------------
-    # Normalize & classify
-    # --------------------
-    score = min(score, 100)
-
-    if score >= 70:
-        level = "high"
-    elif score >= 40:
+    if score < 25:
+        level = "low"
+    elif score < 60:
         level = "medium"
     else:
-        level = "low"
+        level = "high"
 
     return {
         "score": score,
         "level": level,
-        "reasons": sorted(reasons)
+        "reasons": reasons
     }

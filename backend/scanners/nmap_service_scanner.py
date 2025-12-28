@@ -1,23 +1,28 @@
-from scanners.nmap_scanner import run_nmap_scan
-from scanners.nmap_parser import parse_nmap_xml
+from backend.scanners.nmap_scanner import run_nmap_scan
+from backend.config import config
 
 
 def scan_services(domain: str) -> dict:
     """
-    Runs Nmap safely and returns structured results.
+    Run Nmap service detection if enabled.
+    This scanner is optional and must never break the scan.
     """
-    xml_output = run_nmap_scan(domain)
 
-    if not xml_output:
+    if not config.ENABLE_NMAP:
         return {
-            "status": "skipped",
-            "reason": "nmap timed out or failed",
+            "status": "disabled",
             "services": []
         }
 
-    services = parse_nmap_xml(xml_output)
-
-    return {
-        "status": "completed",
-        "services": services
-    }
+    try:
+        services = run_nmap_scan(domain)
+        return {
+            "status": "enabled",
+            "services": services
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "services": [],
+            "reason": str(e)
+        }
