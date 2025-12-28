@@ -1,77 +1,122 @@
-from typing import Dict, List
+from typing import Dict, Set
 
 
-def calculate_risk(result: Dict) -> Dict:
+def calculate_risk(scan: Dict) -> Dict:
     score = 0
-    reasons: List[str] = []
+    reasons: Set[str] = set()
 
-    # ---------- PORTS ----------
-    ports = result.get("ports", {})
-    if ports.get("80") == "open":
+    # --------------------
+    # PORT EXPOSURE (TCP CONNECT)
+    # --------------------
+    ports = scan.get("ports", {})
+
+    port_80 = ports.get("80")
+    port_443 = ports.get("443")
+
+    if isinstance(port_80, dict) and port_80.get("status") == "open":
         score += 10
-        reasons.append("HTTP (port 80) is open")
+        reasons.add("HTTP (port 80) is open")
 
-    # ---------- SSL ----------
-    ssl = result.get("ssl", {})
-    if ssl.get("status") == "disabled":
+    if isinstance(port_443, dict) and port_443.get("status") != "open":
+        score += 5
+        reasons.add("HTTPS (port 443) is not accessible")
+
+    # --------------------
+    # SYN SCAN (GROUND TRUTH, OPTIONAL)
+    # --------------------
+    syn = scan.get("syn_scan", {})
+
+    if syn.get("status") == "completed":
+        open_ports = syn.get("open_ports", [])
+
+        if 22 in open_ports:
+            score += 15
+            reasons.add("SSH exposed (confirmed via SYN scan)")
+
+        if 80 in open_ports:
+            reasons.add("HTTP exposure confirmed via SYN scan")
+
+    elif syn.get("status") == "error":
+        reasons.add("SYN scan unavailable from current execution context")
+
+    # --------------------
+    # SSL / TLS
+    # --------------------
+    ssl = scan.get("ssl", {})
+
+    if ssl.get("status") != "enabled":
         score += 20
-        reasons.append("SSL is disabled")
-    elif ssl.get("status") == "enabled" and ssl.get("confidence") != "high":
-        score += 8
-        reasons.append("SSL enabled with limited verification confidence")
-
-    # ---------- HTTPS HEADERS ----------
-    headers = result.get("https_headers", {})
-    if headers:
-        missing = headers.get("summary", {}).get("missing", 0)
-        if missing >= 3:
+        reasons.add("SSL is not enabled")
+    else:
+        confidence = ssl.get("confidence")
+        if confidence != "high":
             score += 10
-            reasons.append("Multiple security headers are missing")
+            reasons.add("SSL enabled with limited verification confidence")
 
-    # ---------- TECHNOLOGY ----------
-    tech = result.get("technology", {})
+    # --------------------
+    # HTTPS SECURITY HEADERS
+    # --------------------
+    headers = scan.get("https_headers", {})
+    summary = headers.get("summary", {})
+
+    missing_headers = summary.get("missing", 0)
+    permissive_headers = summary.get("permissive", 0)
+
+    if missing_headers > 0:
+        score += min(10, missing_headers * 2)
+        reasons.add("Multiple security headers are missing")
+
+    if permissive_headers > 0:
+        score += 5
+        reasons.add("Permissive security header configuration detected")
+
+    # --------------------
+    # SUBDOMAIN EXPOSURE
+    # --------------------
+    subs = scan.get("subdomains", {})
+
+    if isinstance(subs, dict):
+        count = subs.get("count", 0)
+
+        if count >= 20:
+            score += 15
+            reasons.add("Large number of exposed subdomains")
+        elif count >= 5:
+            score += 5
+            reasons.add("Multiple exposed subdomains detected")
+
+    # --------------------
+    # TECHNOLOGY EXPOSURE
+    # --------------------
+    tech = scan.get("technology", {})
+
     observed = tech.get("observed", {})
     inferred = tech.get("inferred", {})
 
-    if "server" in observed:
+    if observed.get("server"):
         score += 5
-        reasons.append("Server version is exposed")
+        reasons.add("Server header is exposed")
 
-    cdn = inferred.get("cdn")
-    if cdn and cdn["value"] is False:
-        if cdn["confidence"] == "high":
-            score += 8
-            reasons.append("No CDN detected with high confidence")
-        elif cdn["confidence"] == "medium":
-            score += 4
-            reasons.append("No CDN detected (medium confidence)")
-        else:
-            score += 2
-            reasons.append("No CDN detected (low confidence)")
-
-    # ---------- SUBDOMAINS ----------
-    subs = result.get("subdomains", {})
-    if isinstance(subs, dict):
-        count = subs.get("count", 0)
-        if count >= 20:
-            score += 12
-            reasons.append("Large number of exposed subdomains")
-        elif count > 0:
+    cdn_info = inferred.get("cdn")
+    if isinstance(cdn_info, dict):
+        if cdn_info.get("value") is False:
             score += 5
-            reasons.append("Exposed subdomains detected")
+            reasons.add("No CDN detected")
 
-    # ---------- NORMALIZE ----------
-    score = min(score, 100)
+    # --------------------
+    # NORMALIZE SCORE
+    # --------------------
+    score = max(0, min(score, 100))
 
-    if score >= 70:
-        level = "high"
-    elif score >= 40:
+    if score < 30:
+        level = "low"
+    elif score < 70:
         level = "medium"
     else:
-        level = "low"
+        level = "high"
 
     return {
         "score": score,
         "level": level,
-        "reasons": reasons
+        "reasons": sorted(reasons)
     }
